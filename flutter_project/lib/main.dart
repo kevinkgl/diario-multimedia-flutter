@@ -1,9 +1,21 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'firebase_options.dart';
 import 'presentation/views/recording_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Inicialización de Firebase con las opciones de plataforma
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+  } catch (e) {
+    debugPrint('Aviso: Firebase inicializado o pendiente de credenciales: $e');
+  }
+
   runApp(
     const ProviderScope(
       child: MultimediaDiaryApp(),
@@ -28,7 +40,7 @@ class MultimediaDiaryApp extends StatelessWidget {
         scaffoldBackgroundColor: const Color(0xFF0F172A),
       ),
       home: const RecordingScreen(
-        userId: 'kevin.2031.kg@gmail.com', // Reemplazar con ID de FirebaseAuth
+        userId: 'kevin.2031.kg@gmail.com', // Se reemplaza dinámicamente con FirebaseAuth.instance.currentUser?.uid
       ),
     );
   }
