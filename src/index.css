@@ -1,0 +1,38 @@
+@import "tailwindcss";
+
+@layer utilities {
+  .font-handwriting {
+    font-family: 'Caveat', cursive, sans-serif;
+  }
+  .font-mono-code {
+    font-family: 'Fira Code', monospace;
+  }
+  .font-sans-ui {
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  }
+
+  /* Notebook paper lined pattern */
+  .notebook-lines {
+    background-color: #fefcf6;
+    background-image: 
+      /* Red left vertical margin line */
+      linear-gradient(to right, transparent 52px, #f43f5e 52px, #f43f5e 54px, transparent 54px),
+      /* Blue horizontal notebook rules */
+      linear-gradient(to bottom, transparent 27px, #93c5fd 28px, transparent 29px);
+    background-size: 100% 100%, 100% 29px;
+    background-repeat: no-repeat, repeat;
+    line-height: 29px;
+  }
+
+  /* Dark mode notebook styling */
+  .notebook-lines-dark {
+    background-color: #1a1c23;
+    background-image: 
+      linear-gradient(to right, transparent 52px, #f43f5e 52px, #f43f5e 54px, transparent 54px),
+      linear-gradient(to bottom, transparent 27px, #334155 28px, transparent 29px);
+    background-size: 100% 100%, 100% 29px;
+    background-repeat: no-repeat, repeat;
+    line-height: 29px;
+  }
+}
+

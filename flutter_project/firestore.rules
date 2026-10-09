@@ -1,0 +1,28 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /diary_entries/{entryId} {
+      function isOwner(data) {
+        return request.auth != null && request.auth.uid == data.user_id;
+      }
+      function isSharedWithRecipient(data) {
+        return request.auth != null && 
+               request.auth.token.email != null &&
+               data.shared_with != null &&
+               request.auth.token.email.lower() == data.shared_with.lower();
+      }
+
+      allow read: if isOwner(resource.data) || isSharedWithRecipient(resource.data);
+
+      allow create: if request.auth != null &&
+                       request.resource.data.user_id == request.auth.uid &&
+                       request.resource.data.drive_video_id is string &&
+                       request.resource.data.transcription_text is string &&
+                       (request.resource.data.shared_with == null || 
+                        (request.resource.data.shared_with is string && 
+                         request.resource.data.shared_with.size() < 120));
+
+      allow update, delete: if isOwner(resource.data);
+    }
+  }
+}

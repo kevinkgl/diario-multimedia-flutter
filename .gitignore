@@ -1,0 +1,20 @@
+node_modules/
+build/
+dist/
+coverage/
+.DS_Store
+*.log
+.env*
+!.env.example
+
+# Flutter & Dart
+.dart_tool/
+.packages
+.flutter-plugins
+.flutter-plugins-dependencies
+flutter_*.png
+*.lock
+*.apk
+*.aab
+*.ipa
+

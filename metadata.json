@@ -1,0 +1,6 @@
+{
+  "name": "Diario Multimedia Inteligente - Flutter Studio & Architecture",
+  "description": "Arquitectura de software, código de producción en Flutter y simulador en tiempo real para Diario Personal Multimedia con cámara, speech-to-text, Google Drive y Firestore.",
+  "requestFramePermissions": ["camera", "microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

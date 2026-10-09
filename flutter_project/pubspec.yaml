@@ -1,0 +1,50 @@
+name: multimedia_smart_diary
+description: "Diario personal multimedia inteligente con grabación, transcripción, caché SQLite offline y auto-sync."
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.3.0 <4.0.0'
+  flutter: '>=3.19.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Hardware Multimedia
+  camera: ^0.11.0+2
+  speech_to_text: ^7.0.0
+
+  # Almacenamiento Temporal (Caché Local Offline)
+  sqflite: ^2.3.3+1
+  path: ^1.9.0
+
+  # Detección de Conectividad y Sincronización Automática
+  connectivity_plus: ^6.0.5
+
+  # Integración Google Drive & OAuth
+  google_sign_in: ^6.2.1
+  googleapis: ^13.2.0
+  extension_google_sign_in_as_googleapis_auth: ^2.0.12
+
+  # Backend Cloud Firestore
+  firebase_core: ^3.6.0
+  cloud_firestore: ^5.4.4
+  firebase_auth: ^5.3.1
+
+  # Gestión de Estado
+  flutter_riverpod: ^2.5.1
+  permission_handler: ^11.3.1
+
+  # UI & Tipografía
+  google_fonts: ^6.2.1
+  intl: ^0.19.0
+  cupertino_icons: ^1.0.8
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
