@@ -27,13 +27,15 @@ jobs:
           channel: 'stable'
           
       - name: Instalar dependencias
+        working-directory: flutter_project
         run: flutter pub get
         
       - name: Compilar APK Release
+        working-directory: flutter_project
         run: flutter build apk --release --no-tree-shake-icons
         
       - name: Subir APK descargable
         uses: actions/upload-artifact@v4
         with:
           name: DiarioMultimedia-Release-APK
-          path: build/app/outputs/flutter-apk/app-release.apk
+          path: flutter_project/build/app/outputs/flutter-apk/app-release.apk
