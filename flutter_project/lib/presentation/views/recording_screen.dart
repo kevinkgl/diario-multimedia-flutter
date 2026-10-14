@@ -1,11 +1,14 @@
 import 'package:camera/camera.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 
 import '../controllers/diary_controller.dart';
 import '../../data/services/sync_coordinator.dart';
 import '../widgets/notebook_paper_widget.dart';
 import '../widgets/share_single_person_dialog.dart';
+import 'login_screen.dart';
 
 class RecordingScreen extends ConsumerStatefulWidget {
   final String userId;
@@ -481,9 +484,30 @@ class _RecordingScreenState extends ConsumerState<RecordingScreen>
           ],
         ),
         actions: [
-          TextButton(
+          TextButton.icon(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              try {
+                await FirebaseAuth.instance.signOut();
+                await GoogleSignIn().signOut();
+              } catch (_) {}
+              if (context.mounted) {
+                Navigator.of(context).pushAndRemoveUntil(
+                  MaterialPageRoute(builder: (_) => const LoginScreen()),
+                  (route) => false,
+                );
+              }
+            },
+            icon: const Icon(Icons.logout, size: 16, color: Colors.redAccent),
+            label: const Text('Cerrar sesión', style: TextStyle(color: Colors.redAccent)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFF59E0B),
+              foregroundColor: const Color(0xFF0F172A),
+            ),
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cerrar', style: TextStyle(color: Color(0xFFF59E0B))),
+            child: const Text('Aceptar', style: TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),

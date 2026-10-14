@@ -1953,6 +1953,281 @@ service cloud.firestore {
 `,
   },
   {
+    id: 'login_screen',
+    filename: 'login_screen.dart',
+    path: 'lib/presentation/views/login_screen.dart',
+    category: 'ui',
+    description: 'Pantalla de Inicio de Sesión y Autenticación con Google Sign-In y permisos de Google Drive (scope drive.file).',
+    language: 'dart',
+    code: `import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+import 'package:googleapis/drive/v3.dart' as drive;
+import 'recording_screen.dart';
+
+/// Pantalla de Inicio de Sesión y Autenticación con Google y Drive OAuth.
+class LoginScreen extends StatefulWidget {
+  const LoginScreen({super.key});
+
+  @override
+  State<LoginScreen> createState() => _LoginScreenState();
+}
+
+class _LoginScreenState extends State<LoginScreen> {
+  bool _isLoading = false;
+  String? _errorMessage;
+
+  final GoogleSignIn _googleSignIn = GoogleSignIn(
+    scopes: [
+      drive.DriveApi.driveFileScope,
+      'email',
+      'profile',
+    ],
+  );
+
+  Future<void> _handleGoogleSignIn() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
+      if (googleUser == null) {
+        setState(() => _isLoading = false);
+        return;
+      }
+
+      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+      final OAuthCredential credential = GoogleAuthProvider.credential(
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken,
+      );
+
+      try {
+        await FirebaseAuth.instance.signInWithCredential(credential);
+      } catch (authError) {
+        debugPrint('Firebase Auth fallback: $authError');
+      }
+
+      if (!mounted) return;
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (_) => RecordingScreen(userId: googleUser.email),
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _errorMessage = 'Error al iniciar sesión con Google: $e';
+        });
+      }
+    }
+  }
+
+  void _continueAsGuest() {
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder: (_) => const RecordingScreen(userId: 'invitado.local@diario.app'),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF090D16),
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 88,
+                      height: 88,
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFFF59E0B), Color(0xFFD97706)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(28),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFFF59E0B).withOpacity(0.3),
+                            blurRadius: 24,
+                            offset: const Offset(0, 8),
+                          ),
+                        ],
+                      ),
+                      child: const Center(
+                        child: Icon(Icons.menu_book_rounded, size: 46, color: Color(0xFF090D16)),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 28),
+                  Text(
+                    'Diario Multimedia',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.outfit(
+                      fontSize: 30,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
+                      letterSpacing: -0.5,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Graba tus pensamientos en video mientras se escriben en tu diario y se respaldan en tu propio Google Drive.',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.inter(fontSize: 14, color: Colors.white70, height: 1.45),
+                  ),
+                  const SizedBox(height: 36),
+                  ElevatedButton(
+                    onPressed: _isLoading ? null : _handleGoogleSignIn,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: const Color(0xFF1E293B),
+                      padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 20),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    ),
+                    child: _isLoading
+                        ? const SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(strokeWidth: 2.5),
+                          )
+                        : const Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.login, color: Color(0xFF4285F4), size: 20),
+                              SizedBox(width: 12),
+                              Text('Iniciar sesión con Google', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                            ],
+                          ),
+                  ),
+                  const SizedBox(height: 16),
+                  OutlinedButton.icon(
+                    onPressed: _isLoading ? null : _continueAsGuest,
+                    icon: const Icon(Icons.offline_pin_outlined, size: 18, color: Colors.white70),
+                    label: const Text('Continuar sin cuenta (Modo Local SQLite)', style: TextStyle(color: Colors.white70)),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 13),
+                      side: const BorderSide(color: Color(0xFF263352)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+`,
+  },
+  {
+    id: 'auth_gate',
+    filename: 'auth_gate.dart',
+    path: 'lib/presentation/views/auth_gate.dart',
+    category: 'ui',
+    description: 'Enrutador reactivo que verifica la sesión activa en Firebase Auth o redirige a LoginScreen.',
+    language: 'dart',
+    code: `import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
+import 'login_screen.dart';
+import 'recording_screen.dart';
+
+class AuthGate extends StatelessWidget {
+  const AuthGate({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<User?>(
+      stream: FirebaseAuth.instance.authStateChanges(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Scaffold(
+            backgroundColor: Color(0xFF090D16),
+            body: Center(child: CircularProgressIndicator(color: Color(0xFFF59E0B))),
+          );
+        }
+
+        if (snapshot.hasData && snapshot.data != null) {
+          final user = snapshot.data!;
+          return RecordingScreen(userId: user.email ?? user.uid);
+        }
+
+        return const LoginScreen();
+      },
+    );
+  }
+}
+`,
+  },
+  {
+    id: 'main_dart',
+    filename: 'main.dart',
+    path: 'lib/main.dart',
+    category: 'config',
+    description: 'Punto de entrada de la aplicación con inicialización de Firebase, Riverpod y enrutamiento con AuthGate.',
+    language: 'dart',
+    code: `import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'firebase_options.dart';
+import 'presentation/views/auth_gate.dart';
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+  } catch (e) {
+    debugPrint('Firebase init: $e');
+  }
+
+  runApp(
+    const ProviderScope(
+      child: MultimediaDiaryApp(),
+    ),
+  );
+}
+
+class MultimediaDiaryApp extends StatelessWidget {
+  const MultimediaDiaryApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'Diario Personal Multimedia',
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(
+        useMaterial3: true,
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: const Color(0xFFF59E0B),
+          brightness: Brightness.dark,
+        ),
+        scaffoldBackgroundColor: const Color(0xFF0F172A),
+      ),
+      home: const AuthGate(),
+    );
+  }
+}
+`,
+  },
+  {
     id: 'pubspec_yaml',
     filename: 'pubspec.yaml',
     path: 'pubspec.yaml',

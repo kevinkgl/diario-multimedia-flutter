@@ -2,7 +2,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'firebase_options.dart';
-import 'presentation/views/recording_screen.dart';
+import 'presentation/views/auth_gate.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -39,9 +39,7 @@ class MultimediaDiaryApp extends StatelessWidget {
         ),
         scaffoldBackgroundColor: const Color(0xFF0F172A),
       ),
-      home: const RecordingScreen(
-        userId: 'kevin.2031.kg@gmail.com', // Se reemplaza dinámicamente con FirebaseAuth.instance.currentUser?.uid
-      ),
+      home: const AuthGate(),
     );
   }
 }

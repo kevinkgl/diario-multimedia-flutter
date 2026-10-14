@@ -34,7 +34,12 @@ import {
   Plus,
   Calendar,
   Layers,
-  Sparkle
+  Sparkle,
+  LogIn,
+  LogOut,
+  User,
+  ShieldCheck,
+  ArrowRight
 } from 'lucide-react';
 
 export interface SavedEntry {
@@ -88,6 +93,22 @@ export const PhoneSimulator: React.FC = () => {
   const [isOnline, setIsOnline] = useState<boolean>(true);
   const [isAutoSyncing, setIsAutoSyncing] = useState<boolean>(false);
   const [syncStatusMessage, setSyncStatusMessage] = useState<string | null>(null);
+
+  // Screen and Authentication state (requested by user: Login / Iniciar Sesión view)
+  const [simulatorScreen, setSimulatorScreen] = useState<'login' | 'diary'>('login');
+  const [currentUser, setCurrentUser] = useState<{
+    email: string;
+    name: string;
+    photoUrl?: string;
+    isGuest?: boolean;
+  } | null>({
+    email: 'kevin.2031.kg@gmail.com',
+    name: 'Kevin',
+    photoUrl: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop'
+  });
+  const [showGoogleAuthModal, setShowGoogleAuthModal] = useState<boolean>(false);
+  const [customEmailInput, setCustomEmailInput] = useState<string>('');
+  const [isAuthProcessing, setIsAuthProcessing] = useState<boolean>(false);
 
   // Fullscreen & Corner PiP Viewport settings (requested by user)
   const [isFullscreenMode, setIsFullscreenMode] = useState<boolean>(false);
@@ -701,6 +722,42 @@ export const PhoneSimulator: React.FC = () => {
     setLastRecordedVideoUrl(null);
   };
 
+  const handleGoogleSignIn = (emailToUse?: string) => {
+    setIsAuthProcessing(true);
+    const email = emailToUse || customEmailInput.trim() || 'kevin.2031.kg@gmail.com';
+    const name = email.split('@')[0].replace('.', ' ');
+    setTimeout(() => {
+      setCurrentUser({
+        email: email,
+        name: name.charAt(0).toUpperCase() + name.slice(1),
+        photoUrl: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop'
+      });
+      setIsAuthProcessing(false);
+      setShowGoogleAuthModal(false);
+      setSimulatorScreen('diary');
+      setSyncStatusMessage(`¡Bienvenido! Sesión iniciada con Google Drive vinculada a: ${email}`);
+      setTimeout(() => setSyncStatusMessage(null), 4500);
+    }, 800);
+  };
+
+  const handleGuestLogin = () => {
+    setCurrentUser({
+      email: 'invitado.local@diario.app',
+      name: 'Invitado Local',
+      isGuest: true
+    });
+    setSimulatorScreen('diary');
+    setSyncStatusMessage('Modo Local Offline activo: las hojas se guardan en la caché SQLite.');
+    setTimeout(() => setSyncStatusMessage(null), 4500);
+  };
+
+  const handleSignOut = () => {
+    setCurrentUser(null);
+    setSimulatorScreen('login');
+    setSyncStatusMessage('Has cerrado sesión correctamente. Regresando a la pantalla de Login.');
+    setTimeout(() => setSyncStatusMessage(null), 3500);
+  };
+
   const formatTimer = (secs: number) => {
     const mins = Math.floor(secs / 60);
     const remainder = secs % 60;
@@ -760,9 +817,44 @@ export const PhoneSimulator: React.FC = () => {
       {/* Simulator Control Header Bar */}
       <div className="w-full max-w-4xl mb-3 flex flex-wrap items-center justify-between gap-2 px-2">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-xs font-bold text-amber-400 bg-amber-400/10 px-2.5 py-1 rounded-full border border-amber-400/20 flex items-center gap-1.5">
-            <BookOpen className="w-3.5 h-3.5 text-amber-400" />
-            <span>Modo Hoja Completa + Video en Esquina (PiP)</span>
+          {/* Selector de Pantalla: Login vs Hoja de Grabación */}
+          <div className="flex items-center bg-slate-900 border border-slate-700/80 p-0.5 rounded-xl shadow-inner">
+            <button
+              onClick={() => setSimulatorScreen('login')}
+              className={`text-xs px-3 py-1 rounded-lg font-bold flex items-center gap-1.5 transition ${
+                simulatorScreen === 'login'
+                  ? 'bg-amber-500 text-slate-950 shadow'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <LogIn className="w-3.5 h-3.5" />
+              <span>1. Vista de Login (Google)</span>
+            </button>
+            <button
+              onClick={() => {
+                if (!currentUser) {
+                  setCurrentUser({
+                    email: 'kevin.2031.kg@gmail.com',
+                    name: 'Kevin',
+                    photoUrl: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop'
+                  });
+                }
+                setSimulatorScreen('diary');
+              }}
+              className={`text-xs px-3 py-1 rounded-lg font-bold flex items-center gap-1.5 transition ${
+                simulatorScreen === 'diary'
+                  ? 'bg-amber-500 text-slate-950 shadow'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <BookOpen className="w-3.5 h-3.5" />
+              <span>2. Hoja del Diario</span>
+            </button>
+          </div>
+
+          <span className="text-xs font-bold text-amber-400 bg-amber-400/10 px-2.5 py-1 rounded-full border border-amber-400/20 flex items-center gap-1.5 hidden lg:flex">
+            <Sparkle className="w-3 h-3 text-amber-400" />
+            <span>{simulatorScreen === 'login' ? 'login_screen.dart (Google Drive OAuth)' : 'Hoja Completa + Video en Esquina'}</span>
           </span>
 
           {/* Toggle Online / Offline */}
@@ -862,13 +954,40 @@ export const PhoneSimulator: React.FC = () => {
             <div className="w-5 h-5 rounded-md bg-gradient-to-br from-amber-500 to-amber-700 flex items-center justify-center text-slate-950 font-bold text-[10px]">
               📖
             </div>
-            <span className="text-white font-bold text-xs tracking-tight">Mi Libro Diario</span>
-            <span className="text-[10px] text-amber-400 bg-amber-400/10 px-1.5 py-0.2 rounded font-mono">
-              Hoja #{displayPageNumber}
+            <span className="text-white font-bold text-xs tracking-tight">
+              {simulatorScreen === 'login' ? 'Diario Multimedia • Login' : 'Mi Libro Diario'}
             </span>
+            {simulatorScreen === 'diary' && (
+              <span className="text-[10px] text-amber-400 bg-amber-400/10 px-1.5 py-0.2 rounded font-mono">
+                Hoja #{displayPageNumber}
+              </span>
+            )}
+            {simulatorScreen === 'login' && (
+              <span className="text-[10px] text-sky-400 bg-sky-400/10 px-1.5 py-0.2 rounded font-mono">
+                login_screen.dart
+              </span>
+            )}
           </div>
 
           <div className="flex items-center gap-2">
+            {simulatorScreen === 'diary' && currentUser && (
+              <div className="flex items-center gap-1.5 bg-slate-900 border border-slate-800 px-2 py-0.5 rounded-full text-[10px]">
+                <div className="w-3.5 h-3.5 rounded-full bg-amber-500/20 text-amber-300 flex items-center justify-center font-bold text-[8px]">
+                  {currentUser.name.charAt(0)}
+                </div>
+                <span className="text-slate-300 font-mono hidden sm:inline truncate max-w-[80px]">
+                  {currentUser.email.split('@')[0]}
+                </span>
+                <button
+                  onClick={handleSignOut}
+                  title="Cerrar sesión e ir a Login"
+                  className="text-slate-400 hover:text-red-400 transition"
+                >
+                  <LogOut className="w-3 h-3" />
+                </button>
+              </div>
+            )}
+
             {isOnline ? (
               <span className="flex items-center gap-1 text-emerald-400 text-[10px]">
                 <Wifi className="w-3 h-3" /> Drive 1:1
@@ -888,12 +1007,139 @@ export const PhoneSimulator: React.FC = () => {
           </div>
         </div>
 
-        {/* ========================================================
-            HOJA DEL DIARIO: TODA LA PANTALLA COMPLETA
-            Occupies 100% of the screen with ruled paper, binder, 
-            and real-time ink writing!
-           ======================================================== */}
-        <div className="relative flex-1 w-full h-full overflow-hidden flex flex-col bg-[#fdfaf3]">
+        {/* Conditional Screen Router */}
+        {simulatorScreen === 'login' ? (
+          /* ========================================================
+             PANTALLA DE INICIO DE SESIÓN / LOGIN (login_screen.dart)
+             ======================================================== */
+          <div className="relative flex-1 w-full h-full overflow-y-auto bg-[#090D16] text-slate-100 flex flex-col justify-between p-5 sm:p-6 animate-in fade-in select-none">
+            {/* Header info */}
+            <div className="flex items-center justify-between text-[11px] text-slate-400 pb-2 border-b border-slate-800/60">
+              <div className="flex items-center gap-1.5 text-amber-400 font-semibold">
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Vista Flutter: login_screen.dart</span>
+              </div>
+              <span className="text-[10px] bg-sky-950 text-sky-300 border border-sky-500/30 px-2 py-0.5 rounded-full font-mono">
+                Google Drive OAuth v3
+              </span>
+            </div>
+
+            {/* Central content */}
+            <div className="my-auto flex flex-col items-center text-center py-2">
+              {/* App Logo */}
+              <div className="relative mb-3.5">
+                <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-3xl bg-gradient-to-tr from-amber-500 via-amber-600 to-amber-400 flex items-center justify-center text-slate-950 font-black shadow-xl shadow-amber-500/25 ring-4 ring-amber-500/10">
+                  <BookOpen className="w-8 h-8 sm:w-10 sm:h-10 text-slate-950" />
+                </div>
+                <div className="absolute -bottom-1 -right-1 w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-slate-900 border-2 border-amber-500 flex items-center justify-center shadow">
+                  <Camera className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-amber-400" />
+                </div>
+              </div>
+
+              <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">
+                Diario Multimedia
+              </h2>
+              <p className="text-xs text-slate-300 mt-1 max-w-xs leading-relaxed">
+                Tus vivencias en video y papel digital, respaldadas directamente en tu propio <span className="text-sky-400 font-semibold">Google Drive</span>.
+              </p>
+
+              {/* Tarjeta Google Drive OAuth & Seguridad */}
+              <div className="w-full mt-4 p-3.5 rounded-2xl bg-slate-900/90 border border-slate-800 text-left shadow-lg">
+                <div className="flex items-start gap-2.5">
+                  <div className="p-2 rounded-xl bg-sky-500/10 border border-sky-500/20 text-sky-400 shrink-0">
+                    <HardDrive className="w-4 h-4 text-sky-400" />
+                  </div>
+                  <div className="flex-1">
+                    <h4 className="text-xs font-bold text-sky-300 flex items-center gap-1">
+                      <span>Almacenamiento 100% en tu Google Drive</span>
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                    </h4>
+                    <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
+                      La app creará en la raíz de tu Drive la carpeta privada:
+                      <strong className="block text-slate-200 mt-0.5 font-mono text-[10px] bg-slate-950 px-2 py-0.5 rounded border border-slate-800">
+                        📁 Diario Multimedia Personal
+                      </strong>
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-2.5 pt-2.5 border-t border-slate-800/80 flex items-center justify-between text-[10px] text-slate-400">
+                  <span className="flex items-center gap-1 text-emerald-400 font-medium">
+                    <ShieldCheck className="w-3.5 h-3.5" /> Scope: drive.file (Solo tus diarios)
+                  </span>
+                  <span className="text-slate-500">Firestore 1:1</span>
+                </div>
+              </div>
+
+              {/* Botones de Inicio de Sesión */}
+              <div className="w-full mt-4 space-y-2">
+                {/* Botón Principal: Continuar con Google */}
+                <button
+                  onClick={() => setShowGoogleAuthModal(true)}
+                  disabled={isAuthProcessing}
+                  className="w-full py-3 px-4 rounded-2xl bg-white hover:bg-slate-100 text-slate-900 font-bold text-xs flex items-center justify-center gap-2.5 shadow-xl hover:shadow-2xl active:scale-[0.99] transition"
+                >
+                  {isAuthProcessing ? (
+                    <div className="flex items-center gap-2">
+                      <RefreshCw className="w-4 h-4 animate-spin text-slate-900" />
+                      <span>Conectando con Google...</span>
+                    </div>
+                  ) : (
+                    <>
+                      <svg className="w-4 h-4" viewBox="0 0 24 24">
+                        <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                        <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                        <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+                        <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+                      </svg>
+                      <span>Iniciar sesión con Google</span>
+                      <ArrowRight className="w-3.5 h-3.5 ml-auto text-slate-400" />
+                    </>
+                  )}
+                </button>
+
+                {/* Acceso Rápido con tu cuenta */}
+                <button
+                  onClick={() => handleGoogleSignIn('kevin.2031.kg@gmail.com')}
+                  className="w-full py-2.5 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 border border-amber-500/30 text-xs text-slate-300 hover:text-white flex items-center justify-between transition group"
+                >
+                  <div className="flex items-center gap-2">
+                    <div className="w-5 h-5 rounded-full bg-amber-500 text-slate-950 flex items-center justify-center text-[10px] font-black">
+                      K
+                    </div>
+                    <span className="font-mono text-[11px] text-amber-300">kevin.2031.kg@gmail.com</span>
+                  </div>
+                  <span className="text-[10px] text-amber-400 font-semibold group-hover:translate-x-0.5 transition">
+                    Entrar directo &rarr;
+                  </span>
+                </button>
+
+                {/* Botón Alternativo Modo Offline SQLite */}
+                <button
+                  onClick={handleGuestLogin}
+                  className="w-full py-2 px-3 rounded-xl border border-dashed border-slate-700 hover:border-slate-600 text-slate-400 hover:text-slate-200 text-xs flex items-center justify-center gap-2 transition"
+                >
+                  <Database className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Continuar sin cuenta (Modo Local SQLite)</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="pt-2 border-t border-slate-800/60 text-center">
+              <p className="text-[10px] text-slate-500 leading-tight">
+                🔒 Tus videos se transfieren directamente a tu Google Drive personal. Nadie más tiene acceso.
+              </p>
+            </div>
+          </div>
+        ) : (
+          <>
+          {/* ========================================================
+             HOJA DEL DIARIO: TODA LA PANTALLA COMPLETA
+             Occupies 100% of the screen with ruled paper, binder, 
+             and real-time ink writing!
+             ======================================================== */}
+          <div className="relative flex-1 w-full h-full overflow-hidden flex flex-col bg-[#fdfaf3]">
           
           {/* REALISTIC NOTEBOOK SHEET CONTAINER */}
           <div className="w-full h-full notebook-lines relative overflow-y-auto pl-14 sm:pl-16 pr-4 sm:pr-6 py-4 flex flex-col text-slate-900 select-text font-handwriting">
@@ -1286,8 +1532,127 @@ export const PhoneSimulator: React.FC = () => {
           </div>
 
         </div>
+        </>
+      )}
 
       </div>
+
+      {/* ========================================================
+          MODAL: AUTORIZACIÓN GOOGLE OAUTH & GOOGLE DRIVE
+         ======================================================== */}
+      {showGoogleAuthModal && (
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-md p-6 shadow-2xl relative animate-in fade-in zoom-in-95">
+            {/* Google Header */}
+            <div className="flex items-center gap-2.5 mb-2">
+              <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24">
+                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+              </svg>
+              <h3 className="text-sm font-bold text-white">Iniciar sesión con Google</h3>
+            </div>
+            <p className="text-xs text-slate-400">
+              Elige una cuenta para acceder a <strong className="text-white">Diario Multimedia</strong>:
+            </p>
+
+            {/* Account List */}
+            <div className="mt-4 space-y-2">
+              <button
+                onClick={() => handleGoogleSignIn('kevin.2031.kg@gmail.com')}
+                disabled={isAuthProcessing}
+                className="w-full p-3 rounded-2xl bg-slate-950 hover:bg-slate-800 border border-amber-500/30 flex items-center justify-between text-left transition group"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-full bg-amber-500 text-slate-950 font-black flex items-center justify-center text-sm shadow">
+                    K
+                  </div>
+                  <div>
+                    <div className="text-xs font-bold text-white group-hover:text-amber-300 transition">Kevin</div>
+                    <div className="text-[11px] text-amber-300 font-mono">kevin.2031.kg@gmail.com</div>
+                  </div>
+                </div>
+                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+              </button>
+
+              {/* Custom Account Input */}
+              <div className="p-3 rounded-2xl bg-slate-950/60 border border-slate-800 text-xs">
+                <label className="text-[11px] text-slate-400 block mb-1 font-semibold">
+                  O escribe otra cuenta de correo de Google:
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="email"
+                    value={customEmailInput}
+                    onChange={(e) => setCustomEmailInput(e.target.value)}
+                    placeholder="ejemplo@gmail.com"
+                    className="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500"
+                  />
+                  {customEmailInput.trim() && (
+                    <button
+                      onClick={() => handleGoogleSignIn(customEmailInput.trim())}
+                      disabled={isAuthProcessing}
+                      className="px-3 py-1.5 bg-amber-500 text-slate-950 font-bold rounded-xl text-xs hover:bg-amber-400 transition"
+                    >
+                      Continuar
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Google Drive OAuth Scope Explainer */}
+            <div className="mt-4 p-3 rounded-2xl bg-sky-950/40 border border-sky-500/20 text-xs space-y-2">
+              <div className="text-[11px] font-bold text-sky-300 flex items-center gap-1.5">
+                <HardDrive className="w-3.5 h-3.5 text-sky-400" />
+                <span>Permisos solicitados para tu cuenta de Google:</span>
+              </div>
+              <ul className="text-[11px] text-slate-300 space-y-1 pl-1">
+                <li className="flex items-start gap-1.5">
+                  <Check className="w-3 h-3 text-emerald-400 mt-0.5 shrink-0" />
+                  <span><strong>drive.file:</strong> Ver, crear y editar exclusivamente los archivos y videos del diario.</span>
+                </li>
+                <li className="flex items-start gap-1.5">
+                  <Check className="w-3 h-3 text-emerald-400 mt-0.5 shrink-0" />
+                  <span>Crear automáticamente la carpeta privada <code>Diario Multimedia Personal</code> en tu Drive.</span>
+                </li>
+                <li className="flex items-start gap-1.5">
+                  <Check className="w-3 h-3 text-emerald-400 mt-0.5 shrink-0" />
+                  <span>Ninguna otra persona tiene acceso a tus grabaciones ni a tus otros archivos de Drive.</span>
+                </li>
+              </ul>
+            </div>
+
+            {/* Modal actions */}
+            <div className="mt-5 flex items-center justify-between">
+              <button
+                onClick={() => setShowGoogleAuthModal(false)}
+                className="px-4 py-2 text-xs text-slate-400 hover:text-white"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => handleGoogleSignIn('kevin.2031.kg@gmail.com')}
+                disabled={isAuthProcessing}
+                className="px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-xl flex items-center gap-2 shadow"
+              >
+                {isAuthProcessing ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Autorizando...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Permitir y Continuar</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ========================================================
           MODAL: GUARDAR EN LIBRO DIARIO (CON REGLA 1:1)
