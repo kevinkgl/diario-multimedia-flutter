@@ -138,15 +138,52 @@ class _RecordingScreenState extends ConsumerState<RecordingScreen>
         ],
       ),
       body: SafeArea(
-        child: Column(
+        child: Stack(
           children: [
-            Expanded(
-              flex: 5,
+            // 1. HOJA DEL DIARIO EN TODA LA PANTALLA COMPLETA
+            Positioned.fill(
               child: Container(
-                margin: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                margin: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(28),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.35),
+                      blurRadius: 15,
+                      offset: const Offset(0, 5),
+                    ),
+                  ],
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: NotebookPaperWidget(
+                  transcribedText: state.transcriptionText,
+                  currentWords: state.currentWords,
+                  isRecording: state.status == RecordingStatus.recording,
+                ),
+              ),
+            ),
+
+            // 2. VIDEO ENCIMA DE LA HOJA EN UNA ESQUINA COMO UN CUADRITO (PICTURE-IN-PICTURE)
+            Positioned(
+              top: 20,
+              right: 24,
+              width: 135,
+              height: 185,
+              child: Container(
                 decoration: BoxDecoration(
                   color: Colors.black,
-                  borderRadius: BorderRadius.circular(24),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: const Color(0xFFF59E0B).withOpacity(0.8),
+                    width: 2.0,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.6),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
                 ),
                 clipBehavior: Clip.antiAlias,
                 child: Stack(
@@ -164,82 +201,124 @@ class _RecordingScreenState extends ConsumerState<RecordingScreen>
                         child: CircularProgressIndicator(color: Color(0xFFF59E0B)),
                       ),
 
+                    // Badge REC en el cuadrito de video
                     if (state.status == RecordingStatus.recording)
                       Positioned(
-                        top: 14,
-                        left: 14,
+                        top: 8,
+                        left: 8,
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                           decoration: BoxDecoration(
-                            color: Colors.red.withOpacity(0.85),
-                            borderRadius: BorderRadius.circular(20),
+                            color: Colors.red.withOpacity(0.9),
+                            borderRadius: BorderRadius.circular(12),
                           ),
                           child: Row(
+                            mainAxisSize: MainAxisSize.min,
                             children: [
                               FadeTransition(
                                 opacity: _pulseController,
-                                child: Container(width: 8, height: 8, decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle)),
+                                child: Container(
+                                  width: 6,
+                                  height: 6,
+                                  decoration: const BoxDecoration(
+                                    color: Colors.white,
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
                               ),
-                              const SizedBox(width: 8),
+                              const SizedBox(width: 4),
                               Text(
                                 '${(state.recordingDurationSeconds ~/ 60).toString().padLeft(2, '0')}:${(state.recordingDurationSeconds % 60).toString().padLeft(2, '0')}',
-                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w700,
+                                ),
                               ),
                             ],
                           ),
                         ),
                       ),
+
+                    // Indicador de cámara
+                    Positioned(
+                      bottom: 6,
+                      left: 6,
+                      right: 6,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.65),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              state.isFrontCamera ? Icons.person : Icons.landscape,
+                              size: 10,
+                              color: Colors.amber,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              state.isFrontCamera ? 'Frontal' : 'Trasera',
+                              style: const TextStyle(color: Colors.white, fontSize: 9),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),
             ),
 
-            Expanded(
-              flex: 5,
-              child: Container(
-                margin: const EdgeInsets.fromLTRB(16, 4, 16, 12),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(24),
-                ),
-                clipBehavior: Clip.antiAlias,
-                child: NotebookPaperWidget(
-                  transcribedText: state.transcriptionText,
-                  currentWords: state.currentWords,
-                  isRecording: state.status == RecordingStatus.recording,
-                ),
-              ),
-            ),
-
-            Padding(
-              padding: const EdgeInsets.only(bottom: 16),
-              child: GestureDetector(
-                onTap: () async {
-                  if (state.status == RecordingStatus.recording) {
-                    final video = await controller.stopRecording();
-                    if (video != null && context.mounted) {
-                      _showSaveDialog(context, controller, widget.userId);
+            // 3. BOTÓN FLOTANTE DE GRABACIÓN ENCIMA DE LA HOJA
+            Positioned(
+              bottom: 24,
+              left: 0,
+              right: 0,
+              child: Center(
+                child: GestureDetector(
+                  onTap: () async {
+                    if (state.status == RecordingStatus.recording) {
+                      final video = await controller.stopRecording();
+                      if (video != null && context.mounted) {
+                        _showSaveDialog(context, controller, widget.userId);
+                      }
+                    } else {
+                      controller.startRecording();
                     }
-                  } else {
-                    controller.startRecording();
-                  }
-                },
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  width: 74,
-                  height: 74,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: state.status == RecordingStatus.recording
-                        ? Colors.red
-                        : const Color(0xFFF59E0B),
-                  ),
-                  child: Center(
-                    child: Icon(
-                      state.status == RecordingStatus.recording
-                          ? Icons.stop
-                          : Icons.fiber_manual_record,
-                      color: Colors.white,
-                      size: 32,
+                  },
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    width: 72,
+                    height: 72,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: state.status == RecordingStatus.recording
+                          ? Colors.red
+                          : const Color(0xFFF59E0B),
+                      boxShadow: [
+                        BoxShadow(
+                          color: (state.status == RecordingStatus.recording
+                                  ? Colors.red
+                                  : const Color(0xFFF59E0B))
+                              .withOpacity(0.4),
+                          blurRadius: 16,
+                          spreadRadius: 2,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Center(
+                      child: Icon(
+                        state.status == RecordingStatus.recording
+                            ? Icons.stop
+                            : Icons.fiber_manual_record,
+                        color: Colors.white,
+                        size: 32,
+                      ),
                     ),
                   ),
                 ),

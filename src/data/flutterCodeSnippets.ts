@@ -368,6 +368,287 @@ class SyncCoordinator {
 `,
   },
   {
+    id: 'diary_writing_service',
+    filename: 'diary_writing_service.dart',
+    path: 'lib/data/services/diary_writing_service.dart',
+    category: 'service',
+    description: 'Servicio de escritura y dictado por voz integrado con speech_to_text. Transcribe en tiempo real a la hoja del diario y actualiza continuamente el estado de la entrada actual.',
+    language: 'dart',
+    code: `import 'dart:async';
+import 'package:flutter/foundation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:speech_to_text/speech_recognition_error.dart';
+import 'package:speech_to_text/speech_recognition_result.dart';
+import 'package:speech_to_text/speech_to_text.dart';
+
+import '../models/diary_entry_model.dart';
+
+/// Estado actual del servicio de escritura por voz y borrador de entrada
+class DiaryWritingState {
+  final bool isInitialized;
+  final bool isListening;
+  final String committedText;
+  final String interimWords;
+  final double soundLevel;
+  final String? errorMessage;
+  final String currentLocaleId;
+  final DiaryEntry currentEntry;
+
+  const DiaryWritingState({
+    this.isInitialized = false,
+    this.isListening = false,
+    this.committedText = '',
+    this.interimWords = '',
+    this.soundLevel = 0.0,
+    this.errorMessage,
+    this.currentLocaleId = 'es_ES',
+    required this.currentEntry,
+  });
+
+  /// Texto completo visible en la hoja del diario (texto fijado + palabras en curso)
+  String get fullDisplayText {
+    if (interimWords.trim().isEmpty) return committedText;
+    if (committedText.trim().isEmpty) return interimWords;
+    return '\$committedText \$interimWords';
+  }
+
+  DiaryWritingState copyWith({
+    bool? isInitialized,
+    bool? isListening,
+    String? committedText,
+    String? interimWords,
+    double? soundLevel,
+    String? errorMessage,
+    String? currentLocaleId,
+    DiaryEntry? currentEntry,
+  }) {
+    return DiaryWritingState(
+      isInitialized: isInitialized ?? this.isInitialized,
+      isListening: isListening ?? this.isListening,
+      committedText: committedText ?? this.committedText,
+      interimWords: interimWords ?? this.interimWords,
+      soundLevel: soundLevel ?? this.soundLevel,
+      errorMessage: errorMessage,
+      currentLocaleId: currentLocaleId ?? this.currentLocaleId,
+      currentEntry: currentEntry ?? this.currentEntry,
+    );
+  }
+
+  factory DiaryWritingState.initial({String userId = 'local_user'}) {
+    return DiaryWritingState(
+      currentEntry: DiaryEntry(
+        id: '',
+        userId: userId,
+        transcriptionText: '',
+        driveVideoId: '',
+        createdAt: DateTime.now(),
+        durationSeconds: 0,
+      ),
+    );
+  }
+}
+
+/// Provider de Riverpod para inyectar el servicio de escritura del diario
+final diaryWritingServiceProvider =
+    StateNotifierProvider<DiaryWritingService, DiaryWritingState>((ref) {
+  return DiaryWritingService();
+});
+
+/// Servicio de escritura del diario impulsado por 'speech_to_text'
+/// Transcribe en tiempo real la voz a texto y actualiza continuamente el estado
+/// de la entrada actual del diario.
+class DiaryWritingService extends StateNotifier<DiaryWritingState> {
+  final SpeechToText _speechToText = SpeechToText();
+  bool _shouldKeepListening = false;
+
+  DiaryWritingService() : super(DiaryWritingState.initial());
+
+  /// Inicializa el motor SpeechToText y verifica disponibilidad en el sistema
+  Future<bool> initializeEngine({String? preferredLocale}) async {
+    try {
+      final bool available = await _speechToText.initialize(
+        onError: _onSpeechError,
+        onStatus: _onSpeechStatus,
+        debugLogging: kDebugMode,
+      );
+
+      String selectedLocale = preferredLocale ?? 'es_ES';
+      if (available) {
+        final locales = await _speechToText.locales();
+        final hasSpanish = locales.any((l) => l.localeId.startsWith('es'));
+        if (!hasSpanish && locales.isNotEmpty) {
+          selectedLocale = locales.first.localeId;
+        }
+      }
+
+      state = state.copyWith(
+        isInitialized: available,
+        currentLocaleId: selectedLocale,
+        errorMessage: available ? null : 'Reconocimiento de voz no disponible en este dispositivo.',
+      );
+
+      return available;
+    } catch (e) {
+      state = state.copyWith(
+        isInitialized: false,
+        errorMessage: 'Error al inicializar SpeechToText: \$e',
+      );
+      return false;
+    }
+  }
+
+  /// Inicia la escucha continua para transcribir la voz a la hoja del diario
+  Future<void> startVoiceTranscription() async {
+    if (!state.isInitialized) {
+      final ready = await initializeEngine();
+      if (!ready) return;
+    }
+
+    _shouldKeepListening = true;
+
+    try {
+      state = state.copyWith(
+        isListening: true,
+        interimWords: '',
+        errorMessage: null,
+      );
+
+      await _startListeningSession();
+    } catch (e) {
+      state = state.copyWith(
+        isListening: false,
+        errorMessage: 'Error al iniciar transcripción: \$e',
+      );
+    }
+  }
+
+  /// Sesión interna de escucha con configuración de dictado y nivel de sonido
+  Future<void> _startListeningSession() async {
+    if (!_shouldKeepListening) return;
+
+    await _speechToText.listen(
+      onResult: _handleSpeechResult,
+      listenFor: const Duration(minutes: 10),
+      pauseFor: const Duration(seconds: 4),
+      partialResults: true,
+      localeId: state.currentLocaleId,
+      cancelOnError: false,
+      listenMode: ListenMode.dictation,
+      onSoundLevelChange: (level) {
+        state = state.copyWith(soundLevel: level);
+      },
+    );
+  }
+
+  /// Procesa los fragmentos reconocidos (parciales y finales) y actualiza el estado de la entrada
+  void _handleSpeechResult(SpeechRecognitionResult result) {
+    if (result.finalResult) {
+      // Frase finalizada por el reconocedor: se consolida en el texto permanente
+      final String recognized = result.recognizedWords.trim();
+      if (recognized.isNotEmpty) {
+        final String newCommitted = state.committedText.isEmpty
+            ? recognized
+            : '\${state.committedText} \$recognized';
+
+        // Actualizamos tanto el texto fijado como la entrada actual del diario
+        final updatedEntry = state.currentEntry.copyWith(
+          transcriptionText: newCommitted,
+        );
+
+        state = state.copyWith(
+          committedText: newCommitted,
+          interimWords: '',
+          currentEntry: updatedEntry,
+        );
+      }
+    } else {
+      // Palabras intermedias en tiempo real (mientras el usuario sigue hablando)
+      state = state.copyWith(
+        interimWords: result.recognizedWords,
+      );
+    }
+  }
+
+  /// Detiene la transcripción y consolida todo el texto pendiente en la entrada actual
+  Future<void> stopVoiceTranscription() async {
+    _shouldKeepListening = false;
+
+    if (_speechToText.isListening) {
+      await _speechToText.stop();
+    }
+
+    // Consolidar palabras intermedias pendientes si quedaron flotando
+    final String fullText = state.fullDisplayText.trim();
+    final updatedEntry = state.currentEntry.copyWith(
+      transcriptionText: fullText,
+    );
+
+    state = state.copyWith(
+      isListening: false,
+      committedText: fullText,
+      interimWords: '',
+      soundLevel: 0.0,
+      currentEntry: updatedEntry,
+    );
+  }
+
+  /// Permite la edición manual o corrección directa sobre la hoja del diario
+  void updateManualText(String newText) {
+    final updatedEntry = state.currentEntry.copyWith(
+      transcriptionText: newText,
+    );
+    state = state.copyWith(
+      committedText: newText,
+      interimWords: '',
+      currentEntry: updatedEntry,
+    );
+  }
+
+  /// Prepara una nueva hoja en blanco para el diario
+  void resetNewSheet({String? userId}) {
+    state = DiaryWritingState.initial(userId: userId ?? state.currentEntry.userId).copyWith(
+      isInitialized: state.isInitialized,
+      currentLocaleId: state.currentLocaleId,
+    );
+  }
+
+  /// Callback cuando el status del motor de voz cambia
+  void _onSpeechStatus(String status) {
+    debugPrint('[SpeechToText] Estado: \$status');
+    if (status == 'done' && _shouldKeepListening) {
+      // Reactiva la escucha continua si el usuario no ha pulsado detener
+      Future.delayed(const Duration(milliseconds: 200), () {
+        if (_shouldKeepListening && !_speechToText.isListening) {
+          _startListeningSession();
+        }
+      });
+    } else if (status == 'notListening' && !_shouldKeepListening) {
+      state = state.copyWith(isListening: false, soundLevel: 0.0);
+    }
+  }
+
+  /// Callback de errores del motor de voz
+  void _onSpeechError(SpeechRecognitionError error) {
+    debugPrint('[SpeechToText] Error: \${error.errorMsg} (permanente: \${error.permanent})');
+    if (error.permanent) {
+      state = state.copyWith(
+        isListening: false,
+        soundLevel: 0.0,
+        errorMessage: 'Error de reconocimiento: \${error.errorMsg}',
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _shouldKeepListening = false;
+    _speechToText.stop();
+    super.dispose();
+  }
+}
+`,
+  },
+  {
     id: 'diary_controller',
     filename: 'diary_controller.dart',
     path: 'lib/presentation/controllers/diary_controller.dart',
@@ -1054,16 +1335,52 @@ class _RecordingScreenState extends ConsumerState<RecordingScreen>
         ],
       ),
       body: SafeArea(
-        child: Column(
+        child: Stack(
           children: [
-            // SECCIÓN SUPERIOR: Cámara
-            Expanded(
-              flex: 5,
+            // 1. HOJA DEL DIARIO EN TODA LA PANTALLA COMPLETA
+            Positioned.fill(
               child: Container(
-                margin: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                margin: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(28),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.35),
+                      blurRadius: 15,
+                      offset: const Offset(0, 5),
+                    ),
+                  ],
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: NotebookPaperWidget(
+                  transcribedText: state.transcriptionText,
+                  currentWords: state.currentWords,
+                  isRecording: state.status == RecordingStatus.recording,
+                ),
+              ),
+            ),
+
+            // 2. VIDEO ENCIMA DE LA HOJA EN UNA ESQUINA COMO UN CUADRITO (PICTURE-IN-PICTURE)
+            Positioned(
+              top: 20,
+              right: 24,
+              width: 135,
+              height: 185,
+              child: Container(
                 decoration: BoxDecoration(
                   color: Colors.black,
-                  borderRadius: BorderRadius.circular(24),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: const Color(0xFFF59E0B).withOpacity(0.8),
+                    width: 2.0,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.6),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
                 ),
                 clipBehavior: Clip.antiAlias,
                 child: Stack(
@@ -1081,84 +1398,124 @@ class _RecordingScreenState extends ConsumerState<RecordingScreen>
                         child: CircularProgressIndicator(color: Color(0xFFF59E0B)),
                       ),
 
+                    // Badge REC en el cuadrito de video
                     if (state.status == RecordingStatus.recording)
                       Positioned(
-                        top: 14,
-                        left: 14,
+                        top: 8,
+                        left: 8,
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                           decoration: BoxDecoration(
-                            color: Colors.red.withOpacity(0.85),
-                            borderRadius: BorderRadius.circular(20),
+                            color: Colors.red.withOpacity(0.9),
+                            borderRadius: BorderRadius.circular(12),
                           ),
                           child: Row(
+                            mainAxisSize: MainAxisSize.min,
                             children: [
                               FadeTransition(
                                 opacity: _pulseController,
-                                child: Container(width: 8, height: 8, decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle)),
+                                child: Container(
+                                  width: 6,
+                                  height: 6,
+                                  decoration: const BoxDecoration(
+                                    color: Colors.white,
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
                               ),
-                              const SizedBox(width: 8),
+                              const SizedBox(width: 4),
                               Text(
                                 '\${(state.recordingDurationSeconds ~/ 60).toString().padLeft(2, '0')}:\${(state.recordingDurationSeconds % 60).toString().padLeft(2, '0')}',
-                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w700,
+                                ),
                               ),
                             ],
                           ),
                         ),
                       ),
+
+                    // Indicador de cámara
+                    Positioned(
+                      bottom: 6,
+                      left: 6,
+                      right: 6,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.65),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              state.isFrontCamera ? Icons.person : Icons.landscape,
+                              size: 10,
+                              color: Colors.amber,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              state.isFrontCamera ? 'Frontal' : 'Trasera',
+                              style: const TextStyle(color: Colors.white, fontSize: 9),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),
             ),
 
-            // SECCIÓN INFERIOR: Hoja de Cuaderno Pautada
-            Expanded(
-              flex: 5,
-              child: Container(
-                margin: const EdgeInsets.fromLTRB(16, 4, 16, 12),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(24),
-                ),
-                clipBehavior: Clip.antiAlias,
-                child: NotebookPaperWidget(
-                  transcribedText: state.transcriptionText,
-                  currentWords: state.currentWords,
-                  isRecording: state.status == RecordingStatus.recording,
-                ),
-              ),
-            ),
-
-            // Botón de Grabación
-            Padding(
-              padding: const EdgeInsets.only(bottom: 16),
-              child: GestureDetector(
-                onTap: () async {
-                  if (state.status == RecordingStatus.recording) {
-                    final video = await controller.stopRecording();
-                    if (video != null && context.mounted) {
-                      _showSaveDialog(context, controller, widget.userId);
+            // 3. BOTÓN FLOTANTE DE GRABACIÓN ENCIMA DE LA HOJA
+            Positioned(
+              bottom: 24,
+              left: 0,
+              right: 0,
+              child: Center(
+                child: GestureDetector(
+                  onTap: () async {
+                    if (state.status == RecordingStatus.recording) {
+                      final video = await controller.stopRecording();
+                      if (video != null && context.mounted) {
+                        _showSaveDialog(context, controller, widget.userId);
+                      }
+                    } else {
+                      controller.startRecording();
                     }
-                  } else {
-                    controller.startRecording();
-                  }
-                },
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  width: 74,
-                  height: 74,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: state.status == RecordingStatus.recording
-                        ? Colors.red
-                        : const Color(0xFFF59E0B),
-                  ),
-                  child: Center(
-                    child: Icon(
-                      state.status == RecordingStatus.recording
-                          ? Icons.stop
-                          : Icons.fiber_manual_record,
-                      color: Colors.white,
-                      size: 32,
+                  },
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    width: 72,
+                    height: 72,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: state.status == RecordingStatus.recording
+                          ? Colors.red
+                          : const Color(0xFFF59E0B),
+                      boxShadow: [
+                        BoxShadow(
+                          color: (state.status == RecordingStatus.recording
+                                  ? Colors.red
+                                  : const Color(0xFFF59E0B))
+                              .withOpacity(0.4),
+                          blurRadius: 16,
+                          spreadRadius: 2,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Center(
+                      child: Icon(
+                        state.status == RecordingStatus.recording
+                            ? Icons.stop
+                            : Icons.fiber_manual_record,
+                        color: Colors.white,
+                        size: 32,
+                      ),
                     ),
                   ),
                 ),
