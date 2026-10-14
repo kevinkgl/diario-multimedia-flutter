@@ -125,6 +125,12 @@ class _RecordingScreenState extends ConsumerState<RecordingScreen>
           ),
 
           IconButton(
+            tooltip: 'Estado Google Drive',
+            icon: const Icon(Icons.cloud_done, color: Color(0xFF38BDF8), size: 20),
+            onPressed: () => _showDriveAccountInfo(context, widget.userId),
+          ),
+
+          IconButton(
             tooltip: 'Cambiar cámara',
             icon: Icon(
               state.isFrontCamera ? Icons.camera_front : Icons.camera_rear,
@@ -345,18 +351,178 @@ class _RecordingScreenState extends ConsumerState<RecordingScreen>
 
           if (success && context.mounted) {
             final isOffline = controller.state.isOfflineSaved;
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  isOffline
-                      ? '📱 Entrada guardada en caché local. Se sincronizará automáticamente al volver la conexión.'
-                      : '☁️ ¡Entrada subida a Google Drive y registrada confidencialmente!',
+            if (isOffline) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text(
+                    '📱 Entrada guardada en caché local SQLite. Se subirá automáticamente a tu Google Drive al detectar internet.',
+                  ),
+                  backgroundColor: Color(0xFFF59E0B),
+                  duration: Duration(seconds: 4),
                 ),
-                backgroundColor: isOffline ? const Color(0xFFF59E0B) : const Color(0xFF10B981),
-              ),
-            );
+              );
+            } else {
+              _showDriveSuccessDialog(context, controller, userId);
+            }
           }
         },
+      ),
+    );
+  }
+
+  void _showDriveSuccessDialog(BuildContext context, DiaryController controller, String defaultUserId) {
+    final state = controller.state;
+    final accountEmail = state.driveAccountEmail ?? defaultUserId;
+    final fileName = state.driveFileName ?? 'diario_${DateTime.now().millisecondsSinceEpoch}.mp4';
+    final webLink = state.driveWebViewLink ?? 'https://drive.google.com';
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E293B),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: const Color(0xFF10B981).withOpacity(0.2),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.cloud_done, color: Color(0xFF10B981), size: 24),
+            ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Text(
+                '¡Subido a tu Google Drive!',
+                style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Tu video ha quedado almacenado directamente en tu cuenta personal de Google Drive:',
+              style: TextStyle(color: Colors.white70, fontSize: 13),
+            ),
+            const SizedBox(height: 16),
+            _buildInfoRow(Icons.account_circle, 'Cuenta Google', accountEmail),
+            const SizedBox(height: 10),
+            _buildInfoRow(Icons.folder, 'Carpeta en Drive', 'Diario Multimedia Personal'),
+            const SizedBox(height: 10),
+            _buildInfoRow(Icons.videocam, 'Archivo', fileName),
+            const SizedBox(height: 10),
+            _buildInfoRow(Icons.link, 'Enlace directo', webLink, isLink: true),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Entendido', style: TextStyle(color: Color(0xFFF59E0B), fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showDriveAccountInfo(BuildContext context, String userId) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E293B),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(
+          children: [
+            Icon(Icons.add_to_drive, color: Color(0xFF38BDF8), size: 24),
+            SizedBox(width: 10),
+            Text(
+              'Google Drive Vinculado',
+              style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'La aplicación utiliza la cuenta con la que inicias sesión para subir los videos directamente a tu Google Drive personal:',
+              style: TextStyle(color: Colors.white70, fontSize: 13),
+            ),
+            const SizedBox(height: 16),
+            _buildInfoRow(Icons.mail, 'Cuenta activa', userId),
+            const SizedBox(height: 10),
+            _buildInfoRow(Icons.folder_shared, 'Carpeta asignada', 'Diario Multimedia Personal'),
+            const SizedBox(height: 10),
+            _buildInfoRow(Icons.security, 'Permisos (Scope)', 'drive.file (Solo archivos del diario)'),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.05),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.lock, size: 14, color: Colors.greenAccent),
+                  SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      'Tus otros archivos personales y fotos de Drive permanecen totalmente privados e inaccesibles para la app.',
+                      style: TextStyle(fontSize: 11, color: Colors.white60),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cerrar', style: TextStyle(color: Color(0xFFF59E0B))),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoRow(IconData icon, String label, String value, {bool isLink = false}) {
+    return Container(
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: Colors.black.withOpacity(0.25),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.white10),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 16, color: const Color(0xFFF59E0B)),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label, style: const TextStyle(fontSize: 10, color: Colors.white38, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 2),
+                Text(
+                  value,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: isLink ? const Color(0xFF38BDF8) : Colors.white,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

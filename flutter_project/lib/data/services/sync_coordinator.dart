@@ -107,14 +107,15 @@ class SyncCoordinator {
             throw Exception('Archivo de video no encontrado: $videoPath');
           }
 
-          driveVideoId = await _driveService.uploadVideo(
+          final uploadResult = await _driveService.uploadVideo(
             videoFile: XFile(videoPath),
             sharedWithEmail: sharedWith,
           );
 
-          if (driveVideoId == null) {
+          if (uploadResult == null) {
             throw Exception('Fallo al obtener ID de Drive.');
           }
+          driveVideoId = uploadResult.fileId;
         }
 
         final entry = DiaryEntry(

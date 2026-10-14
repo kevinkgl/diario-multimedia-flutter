@@ -36,6 +36,9 @@ class DiaryState {
   final int recordingDurationSeconds;
   final double uploadProgress;
   final String? driveFileId;
+  final String? driveWebViewLink;
+  final String? driveAccountEmail;
+  final String? driveFileName;
   final String? errorMessage;
   final XFile? recordedVideoFile;
   final bool isOfflineSaved;
@@ -51,6 +54,9 @@ class DiaryState {
     this.recordingDurationSeconds = 0,
     this.uploadProgress = 0.0,
     this.driveFileId,
+    this.driveWebViewLink,
+    this.driveAccountEmail,
+    this.driveFileName,
     this.errorMessage,
     this.recordedVideoFile,
     this.isOfflineSaved = false,
@@ -67,6 +73,9 @@ class DiaryState {
     int? recordingDurationSeconds,
     double? uploadProgress,
     String? driveFileId,
+    String? driveWebViewLink,
+    String? driveAccountEmail,
+    String? driveFileName,
     String? errorMessage,
     XFile? recordedVideoFile,
     bool? isOfflineSaved,
@@ -82,6 +91,9 @@ class DiaryState {
       recordingDurationSeconds: recordingDurationSeconds ?? this.recordingDurationSeconds,
       uploadProgress: uploadProgress ?? this.uploadProgress,
       driveFileId: driveFileId ?? this.driveFileId,
+      driveWebViewLink: driveWebViewLink ?? this.driveWebViewLink,
+      driveAccountEmail: driveAccountEmail ?? this.driveAccountEmail,
+      driveFileName: driveFileName ?? this.driveFileName,
       errorMessage: errorMessage,
       recordedVideoFile: recordedVideoFile ?? this.recordedVideoFile,
       isOfflineSaved: isOfflineSaved ?? this.isOfflineSaved,
@@ -298,20 +310,23 @@ class DiaryController extends StateNotifier<DiaryState> {
     try {
       state = state.copyWith(status: RecordingStatus.uploading, uploadProgress: 0.1);
 
-      final driveFileId = await _driveService.uploadVideo(
+      final uploadResult = await _driveService.uploadVideo(
         videoFile: video,
         sharedWithEmail: sharedWithEmail,
         onProgress: (p) => state = state.copyWith(uploadProgress: p),
       );
 
-      if (driveFileId == null) throw Exception('Google Drive no devolvió ID.');
+      if (uploadResult == null) throw Exception('Google Drive no devolvió resultado de carga.');
 
-      final completeEntry = entry.copyWith(driveVideoId: driveFileId);
+      final completeEntry = entry.copyWith(driveVideoId: uploadResult.fileId);
       await _firestoreService.createEntry(completeEntry);
 
       state = state.copyWith(
         status: RecordingStatus.saved,
-        driveFileId: driveFileId,
+        driveFileId: uploadResult.fileId,
+        driveWebViewLink: uploadResult.directDriveUrl,
+        driveAccountEmail: uploadResult.accountEmail,
+        driveFileName: uploadResult.fileName,
         uploadProgress: 1.0,
       );
       return true;

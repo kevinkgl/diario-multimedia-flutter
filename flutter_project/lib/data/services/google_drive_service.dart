@@ -10,10 +10,37 @@ final googleDriveServiceProvider = Provider<GoogleDriveService>((ref) {
   return GoogleDriveService();
 });
 
+/// Resultado estructurado de la subida a Google Drive
+class DriveUploadResult {
+  final String fileId;
+  final String fileName;
+  final String? webViewLink;
+  final String? webContentLink;
+  final String accountEmail;
+  final String folderName;
+
+  const DriveUploadResult({
+    required this.fileId,
+    required this.fileName,
+    this.webViewLink,
+    this.webContentLink,
+    required this.accountEmail,
+    required this.folderName,
+  });
+
+  /// Enlace web estándar de Google Drive para abrir el video en el navegador
+  String get directDriveUrl =>
+      webViewLink ?? 'https://drive.google.com/file/d/$fileId/view';
+}
+
 class GoogleDriveService {
+  /// Scope específico para crear y gestionar archivos de la app sin acceder
+  /// a fotos o archivos privados existentes del usuario.
   static const List<String> _scopes = [
     drive.DriveApi.driveFileScope,
   ];
+
+  static const String appFolderName = 'Diario Multimedia Personal';
 
   final GoogleSignIn _googleSignIn = GoogleSignIn(
     scopes: _scopes,
@@ -21,6 +48,7 @@ class GoogleDriveService {
 
   GoogleSignInAccount? _currentUser;
 
+  /// Retorna el usuario autenticado con Google actual o inicia el flujo interactivo
   Future<GoogleSignInAccount?> getOrSignInUser() async {
     if (_currentUser != null) return _currentUser;
     try {
@@ -31,6 +59,18 @@ class GoogleDriveService {
       debugPrint('Error en Google Sign-In: $e');
       rethrow;
     }
+  }
+
+  /// Retorna el correo de la cuenta de Google vinculada actualmente
+  Future<String?> getCurrentUserEmail() async {
+    final account = await getOrSignInUser();
+    return account?.email;
+  }
+
+  /// Cierra la sesión de Google si el usuario desea cambiar de cuenta
+  Future<void> signOut() async {
+    await _googleSignIn.signOut();
+    _currentUser = null;
   }
 
   Future<drive.DriveApi> _getDriveApi() async {
@@ -47,12 +87,16 @@ class GoogleDriveService {
     return drive.DriveApi(authClient);
   }
 
-  Future<String?> uploadVideo({
+  /// Sube un video grabado a la carpeta 'Diario Multimedia Personal' del usuario en Google Drive
+  Future<DriveUploadResult?> uploadVideo({
     required XFile videoFile,
     String? sharedWithEmail,
     void Function(double progress)? onProgress,
   }) async {
     try {
+      final user = await getOrSignInUser();
+      final userEmail = user?.email ?? 'usuario_google';
+
       final driveApi = await _getDriveApi();
       final folderId = await _getOrCreateAppFolder(driveApi);
 
@@ -72,7 +116,7 @@ class GoogleDriveService {
         contentType: 'video/mp4',
       );
 
-      onProgress?.call(0.3);
+      onProgress?.call(0.25);
 
       final uploadedFile = await driveApi.files.create(
         driveFile,
@@ -80,13 +124,14 @@ class GoogleDriveService {
         $fields: 'id, name, webViewLink, webContentLink',
       );
 
-      onProgress?.call(0.8);
+      onProgress?.call(0.85);
 
       final fileId = uploadedFile.id;
       if (fileId == null) {
         throw Exception('Google Drive no devolvió un ID para el archivo subido.');
       }
 
+      // Si el usuario especificó compartirlo estrictamente con 1 persona
       if (sharedWithEmail != null && sharedWithEmail.trim().isNotEmpty) {
         await _applyStrictSharingPermission(
           driveApi: driveApi,
@@ -96,7 +141,15 @@ class GoogleDriveService {
       }
 
       onProgress?.call(1.0);
-      return fileId;
+
+      return DriveUploadResult(
+        fileId: fileId,
+        fileName: uploadedFile.name ?? fileName,
+        webViewLink: uploadedFile.webViewLink,
+        webContentLink: uploadedFile.webContentLink,
+        accountEmail: userEmail,
+        folderName: appFolderName,
+      );
     } catch (e) {
       debugPrint('Error subiendo video a Google Drive: $e');
       rethrow;
@@ -125,10 +178,8 @@ class GoogleDriveService {
   }
 
   Future<String> _getOrCreateAppFolder(drive.DriveApi driveApi) async {
-    const folderName = 'Diario Multimedia Personal';
-
     final search = await driveApi.files.list(
-      q: "mimeType = 'application/vnd.google-apps.folder' and name = '$folderName' and trashed = false",
+      q: "mimeType = 'application/vnd.google-apps.folder' and name = '$appFolderName' and trashed = false",
       $fields: 'files(id, name)',
     );
 
@@ -137,7 +188,7 @@ class GoogleDriveService {
     }
 
     final folderMetadata = drive.File()
-      ..name = folderName
+      ..name = appFolderName
       ..mimeType = 'application/vnd.google-apps.folder';
 
     final createdFolder = await driveApi.files.create(folderMetadata);
